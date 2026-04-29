@@ -115,7 +115,7 @@ export default function Dashboard() {
             <div>
               <p className="text-gray-500">Reference</p>
               <p className="font-bold">
-                Tala-{generateRef()}
+                Tala Hashpay ID-{generateRef()}
               </p>
             </div>
 
