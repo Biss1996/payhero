@@ -9,7 +9,6 @@ require("dotenv").config();
 const app = express();
 
 app.set("trust proxy", 1);
-
 app.use(helmet());
 
 app.use(
@@ -52,7 +51,7 @@ const speedLimiter = slowDown({
 app.use(generalLimiter);
 
 app.get("/", (req, res) => {
-  res.send("Backend is live 🚀");
+  res.send("PayHero backend is live 🚀");
 });
 
 const formatPhone = (phone) => {
@@ -62,19 +61,19 @@ const formatPhone = (phone) => {
     formattedPhone = formattedPhone.slice(1);
   }
 
-  if (formattedPhone.startsWith("0")) {
-    formattedPhone = "254" + formattedPhone.slice(1);
+  if (formattedPhone.startsWith("254")) {
+    formattedPhone = "0" + formattedPhone.slice(3);
   }
 
   return formattedPhone;
 };
 
 const isValidKenyanPhone = (phone) => {
-  return /^254(7|1)\d{8}$/.test(phone);
+  return /^0(7|1)\d{8}$/.test(phone);
 };
 
 const cleanReference = (reference) => {
-  if (!reference) return `LOAN-${Date.now()}`;
+  if (!reference) return `PAY-${Date.now()}`;
 
   return String(reference)
     .trim()
@@ -82,8 +81,8 @@ const cleanReference = (reference) => {
     .slice(0, 40);
 };
 
-/* ------------------ STK PUSH ------------------ */
-app.post("/stkpush", stkLimiter, speedLimiter, async (req, res) => {
+/* ------------------ PAYHERO PAYMENT ------------------ */
+app.post("/payhero-payment", stkLimiter, speedLimiter, async (req, res) => {
   const { phone, amount, reference } = req.body;
 
   if (!phone || !amount) {
@@ -117,96 +116,64 @@ app.post("/stkpush", stkLimiter, speedLimiter, async (req, res) => {
 
   try {
     const response = await axios.post(
-      "https://api.hashback.co.ke/initiatestk",
+      "https://api.payhero.africa/api/v2/payments",
       {
-        api_key: process.env.HASHPAY_API_KEY,
-        account_id: process.env.HASHPAY_ACCOUNT_ID,
-        amount: String(amountNumber),
-        msisdn: formattedPhone,
-        reference: cleanReference(reference),
+        amount: amountNumber,
+        phone_number: formattedPhone,
+        provider: "m-pesa",
+        network_code: "63902",
+        channel_id: Number(process.env.PAYHERO_CHANNEL_ID),
+        account_id: Number(process.env.PAYHERO_ACCOUNT_ID),
+        external_reference: cleanReference(reference),
+        callback_url: process.env.PAYHERO_CALLBACK_URL,
       },
       {
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Basic ${process.env.PAYHERO_BASIC_AUTH_TOKEN}`,
         },
         timeout: 30000,
       }
     );
 
-    const hashpayData = response.data;
+    const payheroData = response.data;
 
-    console.log("HashPay STK response:", hashpayData);
-
-    const checkoutId =
-      hashpayData.checkout_id ||
-      hashpayData.checkoutId ||
-      hashpayData.CheckoutRequestID ||
-      hashpayData.CheckoutID ||
-      hashpayData.checkoutid;
+    console.log("PayHero payment response:", payheroData);
 
     return res.json({
-      success:
-        Boolean(checkoutId) ||
-        hashpayData.success === true ||
-        hashpayData.success === "true",
-      message: hashpayData.message || "STK push initiated",
-      checkout_id: checkoutId,
+      success: payheroData.success === true,
+      status: payheroData.status,
+      message: payheroData.success
+        ? "STK push sent. Please check your phone."
+        : "Payment request failed",
+      reference: payheroData.reference,
+      checkout_id: payheroData.CheckoutRequestID,
+      external_reference: payheroData.external_reference,
     });
   } catch (error) {
-    console.error("HashPay STK error:", error.response?.data || error.message);
+    console.error("PayHero payment error:", error.response?.data || error.message);
 
     return res.status(500).json({
       success: false,
       message: "STK Push failed",
+      error: error.response?.data || error.message,
     });
   }
 });
 
-/* ------------------ CHECK TRANSACTION STATUS ------------------ */
-app.post("/transaction-status", async (req, res) => {
-  const { checkoutId } = req.body;
+/* ------------------ PAYHERO WEBHOOK ------------------ */
+app.post("/payhero-webhook", async (req, res) => {
+  console.log("PayHero webhook received:", req.body);
 
-  if (!checkoutId || typeof checkoutId !== "string") {
-    return res.status(400).json({
-      success: false,
-      message: "checkoutId is required",
-    });
+  const payment = req.body;
+
+  if (payment.success === true && payment.status === "success") {
+    console.log("Payment completed:", payment.external_reference);
   }
 
-  if (!/^ws_CO_/i.test(checkoutId)) {
-    return res.status(400).json({
-      success: false,
-      message: "Invalid checkoutId",
-    });
-  }
-
-  try {
-    const response = await axios.post(
-      "https://api.hashback.co.ke/transactionstatus",
-      {
-        api_key: process.env.HASHPAY_API_KEY,
-        account_id: process.env.HASHPAY_ACCOUNT_ID,
-        checkoutid: checkoutId,
-      },
-      {
-        headers: {
-          "Content-Type": "application/json",
-        },
-        timeout: 30000,
-      }
-    );
-
-    console.log("HashPay status response:", response.data);
-
-    return res.json(response.data);
-  } catch (error) {
-    console.error("HashPay status error:", error.response?.data || error.message);
-
-    return res.status(500).json({
-      success: false,
-      message: "Transaction status check failed",
-    });
-  }
+  return res.status(200).json({
+    received: true,
+  });
 });
 
 /* ------------------ START SERVER ------------------ */

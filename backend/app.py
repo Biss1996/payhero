@@ -9,22 +9,34 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app)
 
-API_KEY = os.getenv("HASHPAY_API_KEY")
-ACCOUNT_ID = os.getenv("HASHPAY_ACCOUNT_ID")
+PAYHERO_BASIC_AUTH_TOKEN = os.getenv("PAYHERO_BASIC_AUTH_TOKEN")
+PAYHERO_CHANNEL_ID = os.getenv("PAYHERO_CHANNEL_ID")
+PAYHERO_ACCOUNT_ID = os.getenv("PAYHERO_ACCOUNT_ID")
+PAYHERO_CALLBACK_URL = os.getenv("PAYHERO_CALLBACK_URL")
 
 
 @app.route("/")
 def home():
-    return "Backend running 🚀"
+    return "PayHero backend running 🚀"
 
 
-@app.route("/stkpush", methods=["POST"])
+def clean_reference(reference):
+    if not reference:
+        return "PAYMENT"
+
+    return "".join(
+        char for char in str(reference).strip()
+        if char.isalnum() or char in ["-", "_"]
+    )[:40]
+
+
+@app.route("/payhero-payment", methods=["POST"])
 def stkpush():
-    data = request.json
+    data = request.json or {}
 
     phone = data.get("phone")
     amount = data.get("amount")
-    reference = data.get("reference", "PAYMENT")
+    reference = clean_reference(data.get("reference", "PAYMENT"))
 
     if not phone or not amount:
         return jsonify({
@@ -33,21 +45,30 @@ def stkpush():
         }), 400
 
     payload = {
-        "api_key": API_KEY,
-        "account_id": ACCOUNT_ID,
-        "amount": str(amount),
-        "msisdn": phone,
-        "reference": reference
+        "amount": float(amount),
+        "phone_number": str(phone),
+        "provider": "m-pesa",
+        "network_code": "63902",
+        "channel_id": int(PAYHERO_CHANNEL_ID),
+        "account_id": int(PAYHERO_ACCOUNT_ID),
+        "external_reference": reference,
+        "callback_url": PAYHERO_CALLBACK_URL
+    }
+
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Basic {PAYHERO_BASIC_AUTH_TOKEN}"
     }
 
     try:
         response = requests.post(
-            "https://api.hashback.co.ke/initiatestk",
+            "https://api.payhero.africa/api/v2/payments",
             json=payload,
+            headers=headers,
             timeout=30
         )
 
-        return jsonify(response.json())
+        return jsonify(response.json()), response.status_code
 
     except Exception as e:
         return jsonify({
@@ -57,39 +78,18 @@ def stkpush():
         }), 500
 
 
-@app.route("/transaction-status", methods=["POST"])
-def transaction_status():
-    data = request.json
+@app.route("/payhero-webhook", methods=["POST"])
+def payhero_webhook():
+    data = request.json or {}
 
-    checkout_id = data.get("checkoutId")
+    print("PayHero webhook received:", data)
 
-    if not checkout_id:
-        return jsonify({
-            "success": False,
-            "message": "checkoutId is required"
-        }), 400
+    if data.get("success") is True and data.get("status") == "success":
+        print("Payment completed:", data.get("external_reference"))
 
-    payload = {
-        "api_key": API_KEY,
-        "account_id": ACCOUNT_ID,
-        "checkoutid": checkout_id
-    }
-
-    try:
-        response = requests.post(
-            "https://api.hashback.co.ke/transactionstatus",
-            json=payload,
-            timeout=30
-        )
-
-        return jsonify(response.json())
-
-    except Exception as e:
-        return jsonify({
-            "success": False,
-            "message": "Transaction status check failed",
-            "error": str(e)
-        }), 500
+    return jsonify({
+        "received": True
+    }), 200
 
 
 if __name__ == "__main__":

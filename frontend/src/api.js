@@ -7,19 +7,23 @@ const API = axios.create({
   },
 });
 
-// STK Push
-export const initiateSTKPush = async (phone, amount) => {
+// ✅ Initiate PayHero STK Push
+export const initiateSTKPush = async (phone, amount, reference) => {
   try {
     const res = await API.post("/stkpush", {
       phone,
       amount,
-      reference: `LOAN-${Date.now()}`, // ✅ REQUIRED
+      reference: reference || `PAY-${Date.now()}`,
     });
 
     return res.data;
   } catch (error) {
-    console.error("API Error:", error.response?.data || error.message);
-    return { success: false };
+    console.error("STK Push Error:", error.response?.data || error.message);
+
+    return {
+      success: false,
+      message: error.response?.data?.message || "Payment failed",
+    };
   }
 };
 

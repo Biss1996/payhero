@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import Swal from "sweetalert2";
 import { toast } from "react-toastify";
 import Loader from "../components/Loader";
-import { initiateSTKPush, checkHashpayStatus } from "../services/hashpay";
+import { initiateSTKPush } from "../services/payhero";
 
 export default function Payment() {
   const [loading, setLoading] = useState(false);
@@ -14,90 +14,19 @@ export default function Payment() {
   useEffect(() => {
     try {
       const data = JSON.parse(sessionStorage.getItem("myLoan") || "null");
-      const loan = JSON.parse(sessionStorage.getItem("myLoan") || "null");
 
-      if (!loan) {
+      if (!data) {
         navigate("/apply");
         return;
       }
 
       setFormData(data);
-      setLoanData(loan);
+      setLoanData(data);
     } catch (err) {
       console.log("Storage error:", err);
       navigate("/apply");
     }
   }, [navigate]);
-
-  const checkPaymentStatus = (checkoutId) => {
-    let attempts = 0;
-    const maxAttempts = 40;
-
-    const interval = setInterval(async () => {
-      attempts++;
-
-      try {
-        const status = await checkHashpayStatus(checkoutId);
-        console.log("Payment status:", status);
-
-        const resultCode = String(status.ResultCode ?? "");
-
-        if (resultCode === "0") {
-          clearInterval(interval);
-          setLoading(false);
-
-          sessionStorage.setItem("payment_status", "completed");
-
-          Swal.fire({
-            title: "Payment Confirmed ✅",
-            text: "Your payment was successful.",
-            icon: "success",
-            confirmButtonColor: "#10b981",
-          }).then(() => {
-            navigate("/success", { replace: true });
-          });
-
-          return;
-        }
-
-        if (
-          resultCode === "" ||
-          resultCode === "null" ||
-          status.ResponseCode === "0" ||
-          status.ResponseCode === 0
-        ) {
-          console.log("Payment still pending...");
-          return;
-        }
-
-        if (resultCode === "1032" || resultCode === "1" || resultCode === "2001") {
-          clearInterval(interval);
-          setLoading(false);
-
-          Swal.fire({
-            title: "Payment Failed",
-            text: status.ResultDesc || "Payment was cancelled or failed.",
-            icon: "error",
-          });
-
-          return;
-        }
-
-        if (attempts >= maxAttempts) {
-          clearInterval(interval);
-          setLoading(false);
-
-          Swal.fire({
-            title: "Payment Not Confirmed",
-            text: "Payment may have been received, but confirmation is delayed. Please contact support.",
-            icon: "warning",
-          });
-        }
-      } catch (err) {
-        console.log("Status check error:", err);
-      }
-    }, 3000);
-  };
 
   const handlePay = async () => {
     if (!loanData || !formData) {
@@ -116,9 +45,7 @@ export default function Payment() {
       icon: "info",
       allowOutsideClick: false,
       showConfirmButton: false,
-      didOpen: () => {
-        Swal.showLoading();
-      },
+      didOpen: () => Swal.showLoading(),
     });
 
     try {
@@ -128,34 +55,27 @@ export default function Payment() {
         `LOAN-${Date.now()}`
       );
 
-      console.log("FULL STK RESPONSE:", response);
+      console.log("PAYHERO RESPONSE:", response);
 
-      const checkoutId =
-        response.checkout_id ||
-        response.checkoutId ||
-        response.CheckoutRequestID ||
-        response.CheckoutID ||
-        response.checkoutid ||
-        response.raw?.checkout_id ||
-        response.raw?.checkoutId ||
-        response.raw?.CheckoutRequestID ||
-        response.raw?.CheckoutID;
+      if (response.success) {
+        sessionStorage.setItem("payment_status", "pending");
+        sessionStorage.setItem("payment_reference", response.reference || "");
+        sessionStorage.setItem(
+          "external_reference",
+          response.external_reference || ""
+        );
 
-      if (checkoutId) {
         toast.success("STK Push sent!");
 
         Swal.fire({
           title: "Check Your Phone 📱",
-          text: "Enter your M-Pesa PIN. We will confirm payment automatically.",
-          icon: "info",
-          allowOutsideClick: false,
-          showConfirmButton: false,
-          didOpen: () => {
-            Swal.showLoading();
-          },
+          text: "Enter your M-Pesa PIN to complete payment.",
+          icon: "success",
+          confirmButtonColor: "#10b981",
+          confirmButtonText: "Continue",
+        }).then(() => {
+          navigate("/success", { replace: true });
         });
-
-        checkPaymentStatus(checkoutId);
       } else {
         setLoading(false);
 
@@ -224,7 +144,8 @@ export default function Payment() {
           </div>
 
           <div className="text-xs text-gray-600 bg-gray-50 p-3 rounded-lg">
-            You will receive an STK Push. Enter your M-Pesa PIN to complete payment.
+            You will receive an STK Push. Enter your M-Pesa PIN to complete
+            payment.
           </div>
 
           {loading ? (
