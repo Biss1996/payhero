@@ -3,7 +3,7 @@ import api from "../api";
 // ✅ Initiate payment
 export const initiatePayment = async (phone, amount, reference) => {
   try {
-    const res = await api.post("/stkpush", {
+    const res = await api.post("/payhero", {
       phone,
       amount,
       reference,

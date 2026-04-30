@@ -10,7 +10,7 @@ const API = axios.create({
 // ✅ Initiate PayHero STK Push
 export const initiateSTKPush = async (phone, amount, reference) => {
   try {
-    const res = await API.post("/stkpush", {
+    const res = await API.post("/payhero", {
       phone,
       amount,
       reference: reference || `PAY-${Date.now()}`,
