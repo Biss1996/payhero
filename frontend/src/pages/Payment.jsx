@@ -16,7 +16,7 @@ export default function Payment() {
       const data = JSON.parse(sessionStorage.getItem("myLoan") || "null");
 
       if (!data) {
-        navigate("/apply");
+        navigate("/apply", { replace: true });
         return;
       }
 
@@ -24,23 +24,30 @@ export default function Payment() {
       setLoanData(data);
     } catch (err) {
       console.log("Storage error:", err);
-      navigate("/apply");
+      navigate("/apply", { replace: true });
     }
   }, [navigate]);
 
   const handlePay = async () => {
+    if (loading) return;
+
     if (!loanData || !formData) {
       toast.error("Missing loan or user data");
+      return;
+    }
+
+    if (!formData.phone_number || !loanData.processing_fee) {
+      toast.error("Missing phone number or activation fee");
       return;
     }
 
     setLoading(true);
 
     Swal.fire({
-      title: "Processing Payment",
+      title: "Sending STK Push",
       html: `
-        Sending M-Pesa STK Push...<br/>
-        <b>Enter your PIN when prompted</b>
+        Sending M-Pesa payment request...<br/>
+        <b>Please wait</b>
       `,
       icon: "info",
       allowOutsideClick: false,
@@ -49,10 +56,12 @@ export default function Payment() {
     });
 
     try {
+      const reference = `LOAN-${Date.now()}`;
+
       const response = await initiateSTKPush(
         formData.phone_number,
         loanData.processing_fee,
-        `LOAN-${Date.now()}`
+        reference
       );
 
       console.log("PAYHERO RESPONSE:", response);
@@ -60,19 +69,28 @@ export default function Payment() {
       if (response.success) {
         sessionStorage.setItem("payment_status", "pending");
         sessionStorage.setItem("payment_reference", response.reference || "");
-        sessionStorage.setItem(
-          "external_reference",
-          response.external_reference || ""
-        );
+        sessionStorage.setItem("external_reference", reference);
 
         toast.success("STK Push sent!");
 
         Swal.fire({
           title: "Check Your Phone 📱",
-          text: "Enter your M-Pesa PIN to complete payment.",
-          icon: "success",
+          html: `
+            <div style="text-align:center">
+              <p>An M-Pesa STK Push has been sent to:</p>
+              <strong>${formData.phone_number}</strong>
+              <br/><br/>
+              <p>Please enter your M-Pesa PIN to complete payment.</p>
+              <br/>
+              <small style="color:#6b7280">
+                Do not refresh or close this page until you finish.
+              </small>
+            </div>
+          `,
+          icon: "info",
           confirmButtonColor: "#10b981",
-          confirmButtonText: "Continue",
+          confirmButtonText: "I Have Completed Payment",
+          allowOutsideClick: false,
         }).then(() => {
           navigate("/success", { replace: true });
         });
@@ -83,16 +101,18 @@ export default function Payment() {
           title: "Payment Failed",
           text: response.message || "STK Push could not be initiated.",
           icon: "error",
+          confirmButtonColor: "#ef4444",
         });
       }
     } catch (error) {
-      console.log(error);
+      console.log("Payment error:", error);
       setLoading(false);
 
       Swal.fire({
         title: "Error",
-        text: "STK Push failed. Check backend.",
+        text: "STK Push failed. Please try again.",
         icon: "error",
+        confirmButtonColor: "#ef4444",
       });
 
       toast.error("Payment error");
@@ -120,7 +140,7 @@ export default function Payment() {
             </p>
 
             <p className="mt-3 text-xs bg-white/20 inline-block px-3 py-1 rounded-full">
-              ✔ Pre-approved • Fast approval
+              ✔ Pre-approved • Fast processing
             </p>
           </div>
 
@@ -132,7 +152,7 @@ export default function Payment() {
             </p>
 
             <p className="text-xs text-gray-500 mt-2">
-              One-time fee required to release loan
+              One-time fee required to continue processing
             </p>
           </div>
 
@@ -144,25 +164,29 @@ export default function Payment() {
           </div>
 
           <div className="text-xs text-gray-600 bg-gray-50 p-3 rounded-lg">
-            You will receive an STK Push. Enter your M-Pesa PIN to complete
-            payment.
+            You will receive an M-Pesa STK Push. Enter your M-Pesa PIN on your
+            phone to complete the payment.
           </div>
 
           {loading ? (
-            <div className="flex justify-center py-4">
+            <div className="flex flex-col items-center justify-center py-4">
               <Loader />
+              <p className="text-sm text-gray-500 mt-2">
+                Waiting for payment action...
+              </p>
             </div>
           ) : (
             <button
               onClick={handlePay}
-              className="w-full py-3 rounded-xl bg-gradient-to-r from-green-500 to-emerald-600 text-white font-semibold text-lg shadow-md hover:scale-[1.02] transition"
+              disabled={loading}
+              className="w-full py-3 rounded-xl bg-gradient-to-r from-green-500 to-emerald-600 text-white font-semibold text-lg shadow-md hover:scale-[1.02] transition disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              Activate Loan via M-Pesa
+              Activate via M-Pesa
             </button>
           )}
 
           <p className="text-center text-xs text-gray-400">
-            🔒 Secure STK Push Payment
+            Secure M-Pesa STK Push Payment
           </p>
         </div>
       </div>
