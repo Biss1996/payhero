@@ -1,21 +1,46 @@
-import api from "../api";
+export default async function handler(req, res) {
+  if (req.method !== "POST") {
+    return res.status(405).json({
+      success: false,
+      message: "Method not allowed",
+    });
+  }
 
-// ✅ Initiate payment
-export const initiatePayment = async (phone, amount, reference) => {
   try {
-    const res = await api.post("/payhero", {
-      phone,
-      amount,
-      reference,
+    const { phone, amount, reference, customer_name } = req.body;
+
+    if (!phone || !amount) {
+      return res.status(400).json({
+        success: false,
+        message: "Phone and amount are required",
+      });
+    }
+
+    const response = await fetch("https://backend.payhero.co.ke/api/v2/payments", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: process.env.PAYHERO_BASIC_AUTH_TOKEN,
+      },
+      body: JSON.stringify({
+        amount: Number(amount),
+        phone_number: phone,
+        channel_id: Number(process.env.PAYHERO_CHANNEL_ID),
+        provider: "m-pesa",
+        external_reference: reference || `LOAN-${Date.now()}`,
+        customer_name: customer_name || "Customer",
+        callback_url: process.env.PAYHERO_CALLBACK_URL,
+      }),
     });
 
-    return res.data;
-  } catch (error) {
-    console.error("Payment Error:", error);
+    const data = await response.json();
 
-    return {
+    return res.status(response.status).json(data);
+  } catch (error) {
+    return res.status(500).json({
       success: false,
-      message: "Payment failed",
-    };
+      message: "STK Push failed",
+      error: error.message,
+    });
   }
-};
+}

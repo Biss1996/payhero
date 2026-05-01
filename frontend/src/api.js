@@ -1,24 +1,23 @@
 import axios from "axios";
 
 const API = axios.create({
-  baseURL: import.meta.env.VITE_API_URL,
+  baseURL: "",
   headers: {
     "Content-Type": "application/json",
   },
 });
 
-// ✅ Initiate PayHero STK Push
 export const initiateSTKPush = async (phone, amount, reference) => {
   try {
-    const res = await API.post("/payhero", {
+    const res = await API.post("/api/payhero-payment", {
       phone,
       amount,
-      reference: reference || `PAY-${Date.now()}`,
+      reference: reference || `LOAN-${Date.now()}`,
     });
 
     return res.data;
   } catch (error) {
-    console.error("STK Push Error:", error.response?.data || error.message);
+    console.error("PayHero API Error:", error.response?.data || error.message);
 
     return {
       success: false,
