@@ -68,20 +68,25 @@ export default async function handler(req, res) {
       }
     );
 
-    const data = await response.json();
-
-    console.log("PAYHERO RESPONSE:", data);
-
-    // failed request
-    if (!response.ok) {
-      payments[externalReference].status = "failed";
-
-      return res.status(response.status).json({
-        success: false,
-        message: data.message || "STK Push failed",
-        data,
-      });
-    }
+    const response = await fetch(
+  "https://backend.payhero.co.ke/api/v2/payments",
+  {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${process.env.PAYHERO_API_KEY}`,
+    },
+    body: JSON.stringify({
+      amount: Number(amount),
+      phone_number: formattedPhone,
+      channel_id: Number(process.env.PAYHERO_CHANNEL_ID),
+      provider: "m-pesa",
+      external_reference: externalReference,
+      customer_name: customer_name || "Customer",
+      callback_url: process.env.PAYHERO_CALLBACK_URL,
+    }),
+  }
+);
 
     // success
     return res.status(200).json({
