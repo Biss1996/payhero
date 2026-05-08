@@ -22,7 +22,7 @@ export default async function handler(req, res) {
       });
     }
 
-    // ensure payment exists
+    // initialize payment if not exists
     if (!payments[reference]) {
       payments[reference] = {
         status: "pending",
@@ -30,11 +30,11 @@ export default async function handler(req, res) {
       };
     }
 
-    // ✅ ONLY mark success when confirmed
     const isSuccess =
       data?.success === true ||
-      data?.status === "success" ||
-      data?.status === "completed";
+      ["success", "completed"].includes(
+        data?.status?.toLowerCase()
+      );
 
     if (isSuccess) {
       payments[reference] = {
@@ -45,14 +45,17 @@ export default async function handler(req, res) {
           data?.transaction_id ||
           data?.mpesa_receipt_number ||
           null,
-        amount: data?.amount || payments[reference].amount,
-        phone: data?.phone_number || payments[reference].phone,
+        amount:
+          data?.amount ||
+          payments[reference].amount,
+        phone:
+          data?.phone_number ||
+          payments[reference].phone,
         raw: data,
       };
 
       console.log("PAYMENT CONFIRMED:", reference);
     } else {
-      // ⚠️ DO NOT mark failed immediately
       payments[reference] = {
         ...payments[reference],
         status: "pending",

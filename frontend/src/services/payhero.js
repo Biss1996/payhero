@@ -1,8 +1,5 @@
 import API from "../api";
 
-/**
- * Send STK Push request
- */
 export const initiateSTKPush = async (
   phone,
   amount,
@@ -14,48 +11,17 @@ export const initiateSTKPush = async (
       {
         phone,
         amount,
-        reference:
-          reference || `LOAN-${Date.now()}`,
+        reference,
       }
     );
 
     return res.data;
-  } catch (error) {
-    console.error(
-      "STK Error:",
-      error.response?.data || error.message
-    );
-
+  } catch (err) {
     return {
       success: false,
       message:
-        error.response?.data?.message ||
+        err.response?.data?.message ||
         "Payment failed",
-    };
-  }
-};
-
-/**
- * Check payment status
- */
-export const checkPaymentStatus = async (
-  reference
-) => {
-  try {
-    const res = await API.get(
-      `/api/payment-status/${reference}`
-    );
-
-    return res.data;
-  } catch (error) {
-    console.error(
-      "Status Error:",
-      error.response?.data || error.message
-    );
-
-    return {
-      success: false,
-      status: "failed",
     };
   }
 };
