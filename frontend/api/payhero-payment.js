@@ -23,7 +23,7 @@ export default async function handler(req, res) {
       });
     }
 
-    // format phone number
+    // format phone
     let formattedPhone = String(phone).trim();
 
     if (formattedPhone.startsWith("+")) {
@@ -45,17 +45,14 @@ export default async function handler(req, res) {
       created_at: new Date(),
     };
 
-    const response = await fetch(
+    const payheroResponse = await fetch(
       "https://backend.payhero.co.ke/api/v2/payments",
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-
-          // IMPORTANT
           Authorization: `Bearer ${process.env.PAYHERO_API_KEY}`,
         },
-
         body: JSON.stringify({
           amount: Number(amount),
           phone_number: formattedPhone,
@@ -68,33 +65,27 @@ export default async function handler(req, res) {
       }
     );
 
-    const response = await fetch(
-  "https://backend.payhero.co.ke/api/v2/payments",
-  {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${process.env.PAYHERO_API_KEY}`,
-    },
-    body: JSON.stringify({
-      amount: Number(amount),
-      phone_number: formattedPhone,
-      channel_id: Number(process.env.PAYHERO_CHANNEL_ID),
-      provider: "m-pesa",
-      external_reference: externalReference,
-      customer_name: customer_name || "Customer",
-      callback_url: process.env.PAYHERO_CALLBACK_URL,
-    }),
-  }
-);
+    const data = await payheroResponse.json();
 
-    // success
+    console.log("PAYHERO RESPONSE:", data);
+
+    if (!payheroResponse.ok) {
+      payments[externalReference].status = "failed";
+
+      return res.status(payheroResponse.status).json({
+        success: false,
+        message: data.message || "STK Push failed",
+        data,
+      });
+    }
+
     return res.status(200).json({
       success: true,
       message: "STK Push sent successfully",
       reference: externalReference,
       data,
     });
+
   } catch (error) {
     console.log("PAYMENT ERROR:", error);
 

@@ -22,40 +22,45 @@ export default async function handler(req, res) {
       });
     }
 
-    // payment successful
-    if (
-      data?.success === true &&
-      (
-        data?.status === "success" ||
-        data?.status === "completed"
-      )
-    ) {
+    // ensure payment exists
+    if (!payments[reference]) {
       payments[reference] = {
-        ...(payments[reference] || {}),
+        status: "pending",
+        created_at: new Date(),
+      };
+    }
+
+    // ✅ ONLY mark success when confirmed
+    const isSuccess =
+      data?.success === true ||
+      data?.status === "success" ||
+      data?.status === "completed";
+
+    if (isSuccess) {
+      payments[reference] = {
+        ...payments[reference],
         status: "completed",
         paid_at: new Date(),
-
         transaction_id:
           data?.transaction_id ||
           data?.mpesa_receipt_number ||
           null,
-
-        amount: data?.amount || null,
-        phone: data?.phone_number || null,
+        amount: data?.amount || payments[reference].amount,
+        phone: data?.phone_number || payments[reference].phone,
         raw: data,
       };
 
       console.log("PAYMENT CONFIRMED:", reference);
     } else {
-      // failed / cancelled payment
+      // ⚠️ DO NOT mark failed immediately
       payments[reference] = {
-        ...(payments[reference] || {}),
-        status: "failed",
-        failed_at: new Date(),
+        ...payments[reference],
+        status: "pending",
+        last_update: new Date(),
         raw: data,
       };
 
-      console.log("PAYMENT FAILED:", reference);
+      console.log("PAYMENT STILL PENDING:", reference);
     }
 
     return res.status(200).json({
